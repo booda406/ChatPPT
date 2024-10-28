@@ -7,22 +7,27 @@ def main():
     input_text = """
     # ChatPPT_Demo
 
-    ## ChatPPT Demo [Title Only]
+    ## ChatPPT Demo [Title Slide]
 
-    ## 2024 业绩概述 [Title and Content]
+    ## 2024 业绩概述 [Title and Content 1]
     - 总收入增长15%
     - 市场份额扩大至30%
 
-    ## 业绩图表 [Title and Picture 1]
+    ## 业绩图表 [Title and Content 2]
     ![业绩图表](images/performance_chart.png)
 
-    ## 新产品发布 [Title and 2 Column]
+    ## 新产品发布 [1_Title and Content 3]
     - 产品A: 特色功能介绍
     - 产品B: 市场定位
     ![未来增长](images/forecast.png)
     """
 
-    template_file = 'templates/MasterTemplate.pptx'
+    # 確保必要的目錄存在
+    os.makedirs('outputs', exist_ok=True)
+    os.makedirs('templates', exist_ok=True)
+    os.makedirs('images', exist_ok=True)
+
+    template_file = 'templates/LabSafetyPresentation.pptx'
     prs = load_template(template_file)
 
     print("Available Slide Layouts:")
