@@ -19,10 +19,14 @@ def parse_input_text(input_text: str, layout_manager: LayoutManager) -> PowerPoi
     # 正则表达式，用于匹配幻灯片标题、要点和图片
     slide_title_pattern = re.compile(r'^##\s+(.*)')
     bullet_pattern = re.compile(r'^-\s+(.*)')
-    image_pattern = re.compile(r'!\[.*?\]\((.*?)\)')
+    image_pattern = re.compile(r'!\[(.*?)\]\((.*?)\)')
 
     for line in lines:
         line = line.strip()  # 去除空格
+        
+        # 跳过空行
+        if not line:
+            continue
 
         # 主标题 (用作 PowerPoint 的标题和文件名)
         if line.startswith('# ') and not line.startswith('##'):
@@ -47,19 +51,28 @@ def parse_input_text(input_text: str, layout_manager: LayoutManager) -> PowerPoi
                 slide_builder = SlideBuilder(layout_manager)
                 slide_builder.set_title(title)
 
-        # 项目符号（要点）
-        elif line.startswith('- ') and slide_builder:
-            match = bullet_pattern.match(line)
-            if match:
-                bullet = match.group(1).strip()
-                slide_builder.add_bullet_point(bullet)
-
-        # 图片插入
-        elif line.startswith('![') and slide_builder:
-            match = image_pattern.match(line)
-            if match:
-                image_path = match.group(1).strip()
-                slide_builder.set_image(image_path)
+        # 处理行内容
+        elif slide_builder:
+            # 检查是否包含图片
+            image_match = image_pattern.search(line)  # 使用 search 而不是 match
+            if image_match:
+                image_description = image_match.group(1)
+                image_url = image_match.group(2)
+                LOG.info(f"找到图片: {image_url}")
+                slide_builder.set_image(image_url)
+                
+                # 如果这行还包含项目符号内容，提取并添加（去除图片部分）
+                line_without_image = line.split('![')[0].strip()
+                if line_without_image.startswith('- '):
+                    bullet = line_without_image[2:].strip()
+                    if bullet:  # 确保不是空字符串
+                        slide_builder.add_bullet_point(bullet)
+            
+            # 如果是普通项目符号
+            elif line.startswith('- '):
+                bullet = line[2:].strip()
+                if bullet:  # 确保不是空字符串
+                    slide_builder.add_bullet_point(bullet)
 
     # 为最后一张幻灯片分配布局并添加到列表中
     if slide_builder:

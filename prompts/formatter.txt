@@ -26,8 +26,10 @@ Please follow these strict formatting rules:
 
 3. Visual Slide Format:
 ## [Slide Title]
+- [Key Point 1]
+- [Key Point 2]
 - need_image
-- [Supporting Text]
+- (Short description for image)
 
 Image Usage Guidelines (CRITICAL):
 1. MUST add "- need_image" for these situations:
@@ -95,29 +97,29 @@ Example Output:
 # Digital Transformation Strategy
 - Q4 2024 Roadmap
 
-# Market Overview
+## Market Overview
 - need_image
 (For market trend visualization)
 
-# Current Challenges
+## Current Challenges
 - Complex legacy systems integration
 - Manual data processing bottlenecks
 - Limited digital customer touchpoints
 - need_image
 (For challenge impact diagram)
 
-# Solution Architecture
+## Solution Architecture
 - need_image
 (For system architecture diagram)
 
-# Implementation Timeline
+## Implementation Timeline
 - Phase 1: System Analysis (Q1 2025)
 - Phase 2: Development (Q2-Q3 2025)
 - Phase 3: Testing (Q4 2025)
 - need_image
 (For timeline visualization)
 
-# Expected Outcomes
+## Expected Outcomes
 - 40% reduction in processing time
 - 60% increase in customer satisfaction
 - 25% cost savings in operations

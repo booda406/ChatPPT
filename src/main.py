@@ -1,15 +1,19 @@
 import os
 import gradio as gr
+import requests
+import json
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_community.tools import DuckDuckGoSearchResults
-from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 from input_parser import parse_input_text
 from ppt_generator import generate_presentation
 from template_manager import load_template
 from layout_manager import LayoutManager
 from config import Config
 from logger import LOG
+from dotenv import load_dotenv
+from typing import Optional, Dict, Any
+
 
 class ChatPPTInterface:
     def __init__(self):
@@ -17,10 +21,11 @@ class ChatPPTInterface:
         self.layout_manager = LayoutManager(self.config.layout_mapping)
         self.prs = load_template(self.config.ppt_template)
 
-        # 初始化搜索工具
-        self.search_tool = DuckDuckGoSearchResults(
-            api_wrapper=DuckDuckGoSearchAPIWrapper()
-        )
+        load_dotenv()  # 載入環境變數
+        
+        # 初始化 Pixabay API 設置
+        self.pixabay_api_key = os.getenv("PIXABAY_API_KEY")
+        self.pixabay_api_url = "https://pixabay.com/api/"
 
         # 初始化 ChatOpenAI
         self.chat = ChatOpenAI(
@@ -59,63 +64,127 @@ class ChatPPTInterface:
 
         # 獲取幻燈片標題
         title = lines[0].strip()
-
-        # 尋找 need_image 和對應的描述
+        
+        # 初始化變量
         image_description = None
         need_image_index = -1
 
+        # 尋找包含 need_image 的行及其描述
         for i, line in enumerate(lines):
-            if 'need_image' in line.lower():
+            line = line.strip()
+            # 移除開頭的破折號和空格
+            cleaned_line = line.lstrip('- ').strip()
+            
+            if 'need_image' in cleaned_line.lower():
                 need_image_index = i
-                # 尋找下一行的括號描述
-                if i + 1 < len(lines) and lines[i + 1].strip().startswith('(') and lines[i + 1].strip().endswith(')'):
-                    image_description = lines[i + 1].strip()[1:-1]  # 移除括號
-                    break
+                
+                # 檢查下一行是否為圖片描述（帶括號的文本）
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    if next_line.startswith('(') and next_line.endswith(')'):
+                        image_description = next_line[1:-1]  # 移除括號
+                break
 
         if need_image_index != -1:
             # 決定搜索關鍵詞
             search_query = image_description if image_description else title
-
+            
+            # 處理搜索關鍵詞
+            search_query = search_query.replace("，", " ").replace("。", " ").strip()
+            
             # 搜索相關圖片
             image_url = self._search_images(search_query)
-
+            
             if image_url:
                 LOG.info(f"找到圖片，開始插入圖片:\n{image_url}")
-                # 移除 need_image 行和描述行
+                
+                # 構建新的行列表
                 new_lines = []
                 skip_next = False
+                
                 for i, line in enumerate(lines):
-                    if i == need_image_index or skip_next:
-                        skip_next = False
-                        continue
-                    if 'need_image' in line.lower():
+                    if i == need_image_index:
+                        # 在 need_image 的位置插入圖片
+                        indent = ' ' * (len(line) - len(line.lstrip()))
+                        if line.lstrip().startswith('- '):
+                            indent += '- '
+                        new_lines.append(f"{indent}![{search_query}]({image_url})")
                         skip_next = True  # 跳過下一行（描述行）
                         continue
+                    
+                    if skip_next:
+                        skip_next = False
+                        continue
+                        
                     new_lines.append(line)
 
-                # 在適當位置插入圖片
-                image_line = f"![{search_query}]({image_url})"
-                # 將圖片插入到標題之後
-                new_lines.insert(1, image_line)
-
+                LOG.info(f"處理後的內容:\n" + '\n'.join(new_lines))
                 return '\n'.join(new_lines)
 
         return slide_content
 
-    def _search_images(self, query):
-        """搜索相關圖片"""
-        LOG.info(f"開始搜索:\n")
+
+
+    def _search_images(self, query: str) -> Optional[str]:
+        """
+        使用 Pixabay API 搜索相關圖片
+        
+        Args:
+            query (str): 搜索關鍵詞
+            
+        Returns:
+            Optional[str]: 圖片 URL 或 None（如果沒找到）
+        """
+        LOG.info(f"開始搜索圖片: {query}")
+        
         try:
-            # 添加更具體的搜索關鍵詞以提高相關性
-            search_query = f"{query} image"
-            results = self.search_tool.run(search_query)
-            LOG.info(f"搜索結果:\n{results}")
-            if results and isinstance(results, list) and len(results) > 0:
-                # 假設結果中包含圖片 URL
-                return results[0]  # 返回第一個搜索結果
+            if not self.pixabay_api_key:
+                LOG.error("Pixabay API key 未設置")
+                return None
+
+            # 準備請求參數
+            params: Dict[str, Any] = {
+                'key': self.pixabay_api_key,
+                'q': query,
+                'lang': 'zh',  # 設置搜索語言為中文
+                'image_type': 'photo',  # 只搜索照片
+                'orientation': 'horizontal',  # 橫向圖片
+                'safesearch': 'true',  # 安全搜索
+                'per_page': 3,  # 每頁返回的結果數
+                'page': 1  # 頁碼
+            }
+
+            # 發送 API 請求
+            response = requests.get(self.pixabay_api_url, params=params)
+            response.raise_for_status()  # 檢查請求是否成功
+            
+            data = response.json()
+            
+            # 記錄搜索結果
+            LOG.info(f"搜索結果總數: {data.get('total', 0)}")
+            
+            # 檢查是否有搜索結果
+            if data.get('hits'):
+                # 獲取第一個結果的圖片 URL
+                # 使用 webformatURL 獲取適中大小的圖片（640px）
+                # 或使用 largeImageURL 獲取大圖（1280px）
+                image_url = data['hits'][0].get('webformatURL')
+                
+                if image_url:
+                    LOG.info(f"找到圖片 URL: {image_url}")
+                    return image_url
+            
+            LOG.warning("未找到相關圖片")
+            return None
+
+        except requests.RequestException as e:
+            LOG.error(f"API 請求錯誤: {str(e)}")
+            return None
+        except json.JSONDecodeError as e:
+            LOG.error(f"JSON 解析錯誤: {str(e)}")
             return None
         except Exception as e:
-            LOG.error(f"搜索圖片時發生錯誤: {str(e)}")
+            LOG.error(f"搜索圖片時發生未知錯誤: {str(e)}")
             return None
 
 
