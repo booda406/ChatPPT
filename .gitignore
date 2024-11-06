@@ -168,4 +168,6 @@ tests/*
 .DS_STore
 jupyter/*.pptx
 .gradio/*
-nohup.out
+nohup.out.env.docker
+docker-compose.yml
+.env.docker
