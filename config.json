@@ -4,5 +4,8 @@
     "content_formatter_prompt": "prompts/content_formatter.txt",
     "content_assistant_prompt": "prompts/content_assistant.txt",
     "image_advisor_prompt": "prompts/image_advisor.txt",
-    "ppt_template": "templates/SimpleTemplate.pptx"
+    "ppt_template": "templates/SimpleTemplate.pptx",
+    "reflection_max_iterations": 7,
+    "reflection_min_iterations": 3,
+    "reflection_improvement_threshold": 0.2
 }

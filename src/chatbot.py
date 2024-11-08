@@ -4,12 +4,12 @@ from abc import ABC, abstractmethod
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder  # 导入提示模板相关类
-from langchain_core.messages import HumanMessage  # 导入消息类
+from langchain_core.messages import HumanMessage, AIMessage  # 导入消息类
 from langchain_core.runnables.history import RunnableWithMessageHistory  # 导入带有消息历史的可运行类
 
 from logger import LOG  # 导入日志工具
 from chat_history import get_session_history
-
+from reflection_engine import ReflectionEngine, ReflectionOutput
 
 class ChatBot(ABC):
     """
@@ -21,6 +21,7 @@ class ChatBot(ABC):
         self.prompt = self.load_prompt()
         # LOG.debug(f"[ChatBot Prompt]{self.prompt}")
         self.create_chatbot()
+        self.reflection_engine = ReflectionEngine()
 
     def load_prompt(self):
         """
@@ -73,5 +74,18 @@ class ChatBot(ABC):
             {"configurable": {"session_id": session_id}},  # 传入配置，包括会话ID
         )
 
-        LOG.debug(f"[ChatBot] {response.content}")  # 记录调试日志
-        return response.content  # 返回生成的回复内容
+        # 使用 ReflectionEngine 進行反思和改進
+        reflection_result: ReflectionOutput = self.reflection_engine.reflect_and_improve(response.content)
+
+        LOG.debug(f"[ChatBot] Original: {response.content}")
+        LOG.debug(f"[ChatBot] Improved: {reflection_result.final_content}")
+        LOG.debug(f"[ChatBot] Reflection iterations: {reflection_result.iterations}")
+        LOG.debug(f"[ChatBot] Final reflection score: {reflection_result.final_score}")
+
+        # 將改進後的回覆添加到聊天歷史
+        self.chatbot_with_history.invoke(
+            [AIMessage(content=reflection_result.final_content)],
+            {"configurable": {"session_id": session_id}},
+        )
+
+        return reflection_result.final_content

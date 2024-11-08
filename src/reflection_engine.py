@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -75,17 +75,27 @@ class ReflectionEngine:
         try:
             final_state = initial_state
             for output in graph.stream(initial_state):
-                LOG.debug(f"output['iterations'] is {output['analyze']['iterations']}")
-                LOG.debug(f"output['previous_score'] is {output['analyze']['previous_score']}")
+                LOG.debug(f"Stream output: {output}")
                 if isinstance(output, dict):
-                    if 'state' in output:
-                        final_state = ReflectionState(**output['state'])
-                        LOG.debug(f"Updated state: iterations={final_state.iterations}, content_length={len(final_state.content)}")
+                    if 'evaluate' in output:
+                        evaluate_data = output['evaluate']
+                        # 更新 final_state 的各個屬性
+                        final_state.content = evaluate_data.get('content', final_state.content)
+                        final_state.analysis = evaluate_data.get('analysis', final_state.analysis)
+                        final_state.improved_content = evaluate_data.get('improved_content', final_state.improved_content)
+                        final_state.evaluation = evaluate_data.get('evaluation', final_state.evaluation)
+                        final_state.iterations += 1  # 假設每次迭代都更新
+                        final_state.previous_score = evaluate_data.get('evaluation', {}).get('score', final_state.previous_score)
+
+                        LOG.debug(f"Updated state: iterations={final_state.iterations}, "
+                                  f"content_length={len(final_state.content)}")
+
                     if output.get('end'):
                         LOG.info("Reflection process completed")
                         break
-                # Log the state after each stream output
-                LOG.debug(f"Intermediate state: iterations={final_state.iterations}, content_length={len(final_state.content)}")
+                LOG.debug(f"Intermediate state: iterations={final_state.iterations}, "
+                          f"previous_score={final_state.previous_score}, "
+                          f"content_length={len(final_state.content)}")
             LOG.info("Reflection process completed successfully")
             LOG.debug(f"Final state: iterations={final_state.iterations}, content_length={len(final_state.content)}")
         except Exception as e:
@@ -94,6 +104,7 @@ class ReflectionEngine:
             LOG.error(traceback.format_exc())
         
         return self._extract_result(final_state)
+
 
 
     def _extract_result(self, state: ReflectionState) -> ReflectionOutput:
@@ -110,7 +121,7 @@ class ReflectionEngine:
             final_score=final_score
         )
 
-    def _should_continue(self, state: ReflectionState) -> bool:
+    def _should_continue(self, state: ReflectionState) -> Tuple[bool, ReflectionState]:
         """決定是否繼續迭代"""
         if state.iterations >= self.max_iterations:
             LOG.info(f"Stopping: Maximum iterations ({self.max_iterations}) reached")
@@ -128,8 +139,6 @@ class ReflectionEngine:
                     LOG.info(f"Stopping: No significant improvement (threshold: {self.improvement_threshold})")
                     return False
             
-            state.previous_score = current_score
-            LOG.debug(f"Updated previous score to: {state.previous_score}")
             LOG.info(f"Continuing to next iteration. Current score: {current_score}")
         elif state.iterations > 0:
             LOG.warning("No evaluation available, but continuing")
@@ -139,7 +148,13 @@ class ReflectionEngine:
 
     def _analyze_content(self, state: ReflectionState) -> ReflectionState:
         """分析當前內容"""
-        LOG.debug(f"Analyzing content (iteration {state.iterations + 1})")
+        LOG.debug(f"Analyzing content (iteration {state.iterations + 1}) with previous score {state.previous_score}")
+
+        # 更新 previous_score 如果有 evaluation
+        if state.evaluation:
+            state.previous_score = float(state.evaluation.get('score', 0.0))
+            LOG.debug(f"Updated previous score to: {state.previous_score} based on evaluation")
+
         prompt = ChatPromptTemplate.from_messages([
             HumanMessage(content=self._get_analysis_template().format(content=state.content))
         ])

@@ -18,22 +18,21 @@ from openai_whisper import asr, transcribe
 from docx_parser import generate_markdown_from_docx
 
 
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGCHAIN_PROJECT"] = "ChatPPT"
 
 # 实例化 Config，加载配置文件
 config = Config()
-chatbot = ChatBot(config.chatbot_prompt)
-content_formatter = ContentFormatter(config.content_formatter_prompt)
-content_assistant = ContentAssistant(config.content_assistant_prompt)
-image_advisor = ImageAdvisor(config.image_advisor_prompt)
+chatbot = ChatBot(config.prompts.chatbot)
+content_formatter = ContentFormatter(config.prompts.content_formatter)
+content_assistant = ContentAssistant(config.prompts.content_assistant)
+image_advisor = ImageAdvisor(config.prompts.image_advisor)
 
 # 加载 PowerPoint 模板，并获取可用布局
 ppt_template = load_template(config.ppt_template)
 
 # 初始化 LayoutManager，管理幻灯片布局
 layout_manager = LayoutManager(get_layout_mapping(ppt_template))
-
 
 # 定义生成幻灯片内容的函数
 def generate_contents(message, history):
@@ -75,10 +74,13 @@ def generate_contents(message, history):
         user_requirement = "需求如下:\n" + "\n".join(texts)
         LOG.info(user_requirement)
 
-        # 与聊天机器人进行对话，生成幻灯片内容
+        # 與聊天機器人進行對話，生成幻燈片內容
         slides_content = chatbot.chat_with_history(user_requirement)
 
-        return slides_content
+        # 使用 ContentFormatter 進行初始格式化
+        formatted_content = content_formatter.format(slides_content)
+
+        return formatted_content
     except Exception as e:
         LOG.error(f"[内容生成错误]: {e}")
         # 抛出 Gradio 错误，以便在界面上显示友好的错误信息
